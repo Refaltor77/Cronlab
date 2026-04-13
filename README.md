@@ -1,36 +1,348 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<p align="center">
+  <h1 align="center">Cronlab</h1>
+  <p align="center">
+    A scheduled task manager for macOS.<br/>
+    Built to automate <a href="https://claude.ai/claude-code">Claude Code</a> sessions via <code>launchd</code>.
+  </p>
+</p>
 
-## Getting Started
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-macOS-black?style=flat-square" />
+  <img src="https://img.shields.io/badge/runtime-Next.js_16-black?style=flat-square" />
+  <img src="https://img.shields.io/badge/scheduler-launchd-black?style=flat-square" />
+  <img src="https://img.shields.io/badge/license-MIT-black?style=flat-square" />
+</p>
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Why Cronlab?
+
+`cron` on macOS cannot access the Keychain. As a result, commands like `claude -p "..."` fail with `Not logged in`.
+
+**Cronlab** uses `launchd` (the native macOS scheduler) which runs in the user context with full access to the Keychain, Homebrew PATH, and shell environment.
+
+```
+crontab  -->  no Keychain access  -->  "Not logged in"
+launchd  -->  Keychain access     -->  Claude runs fine
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Feature | Description |
+|---|---|
+| **View** | List all tasks with active/inactive status, cron schedule, command |
+| **Create** | Form with individual cron fields, quick presets, live preview |
+| **Edit** | Inline editing of each task (schedule, command, label) |
+| **Enable/Disable** | Toggle on/off without deleting the task |
+| **Delete** | Double confirmation before removal |
+| **History** | Stdout/stderr logs from each execution |
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## Screenshots
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Task list
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+> Main view with tasks showing active/inactive states, cron schedules, and commands.
 
-## Deploy on Vercel
+```
++--------------------------------------------------+
+|  Cronlab                                          |
+|  Scheduled tasks                                  |
+|                                                   |
+|  [Tasks 3]  [New]  [History]                      |
+|                                                   |
+|  +----------------------------------------------+|
+|  | * Active  Daily Code Review            [=] [x]||
+|  | 0 9 * * * -> claude -p "Review open PRs..."  ||
+|  | Every day at 9:00 AM                          ||
+|  +----------------------------------------------+|
+|                                                   |
+|  +----------------------------------------------+|
+|  | * Inactive  Health Check CI            [ ] [x]||
+|  | */15 * * * * -> claude -p "Check status..."  ||
+|  | Every 15 minutes                              ||
+|  +----------------------------------------------+|
+|                                                   |
+|  +----------------------------------------------+|
+|  | * Active  Weekly Report                [=] [x]||
+|  | 0 0 * * 0 -> claude -p "Generate report..."  ||
+|  | Every Sunday at midnight                      ||
+|  +----------------------------------------------+|
++--------------------------------------------------+
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Create form
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> Live cron expression preview, 9 quick presets, command and label fields.
+
+### Inline edit mode
+
+> Click the pencil icon to edit the schedule, command, and label directly in the card.
+
+---
+
+## Installation
+
+### Prerequisites
+
+- macOS (uses `launchd`)
+- Node.js 20+
+- [Claude Code](https://claude.ai/claude-code) installed (optional, for automated sessions)
+
+### Setup
+
+```bash
+# Clone the repo
+git clone https://github.com/Refaltor77/Cronlab.git
+cd Cronlab
+
+# Install dependencies
+npm install
+
+# Start the server
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+---
+
+## Architecture
+
+```
+src/
+  app/
+    page.tsx                         # Main interface (React client component)
+    layout.tsx                       # Layout with Geist font
+    globals.css                      # Design system (white theme)
+    api/
+      crontab/
+        route.ts                     # LaunchAgents CRUD (GET/POST/PUT/PATCH/DELETE)
+        history/
+          route.ts                   # Execution logs reader
+
+~/Library/LaunchAgents/
+  com.cronlab.task-*.plist           # Plist files generated by Cronlab
+
+~/.cronlab/logs/
+  task-*.stdout.log                  # Standard output for each task
+  task-*.stderr.log                  # Error output for each task
+  task-*.meta.json                   # Metadata (label)
+```
+
+### How it works
+
+1. **Create** — Cronlab generates a `.plist` file in `~/Library/LaunchAgents/`
+2. **Load** — `launchctl load` registers the plist with the macOS scheduler
+3. **Execute** — `launchd` runs the command via `/bin/zsh -l -c` (login shell = Keychain access)
+4. **Log** — stdout/stderr are redirected to `~/.cronlab/logs/`
+5. **Disable** — `launchctl unload` removes the job without deleting the file
+
+### Generated plist example
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.cronlab.task-1234567890</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/zsh</string>
+      <string>-l</string>
+      <string>-c</string>
+      <string>claude -p "Review open PRs" --dangerously-skip-permissions</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>9</integer>
+      <key>Minute</key>
+      <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>~/.cronlab/logs/task-1234567890.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>~/.cronlab/logs/task-1234567890.stderr.log</string>
+  </dict>
+</plist>
+```
+
+---
+
+## Usage examples
+
+### Daily code review every morning
+
+```
+Schedule :  0 9 * * 1-5
+Command  :  claude -p "Review open PRs on this repo and summarize the changes" --dangerously-skip-permissions
+Label    :  Daily Code Review
+```
+
+### Health check every 15 minutes
+
+```
+Schedule :  */15 * * * *
+Command  :  claude -p "Run the tests and verify the build passes" --dangerously-skip-permissions
+Label    :  Health Check CI
+```
+
+### Weekly report on Sundays
+
+```
+Schedule :  0 0 * * 0
+Command  :  claude -p "Generate a summary of this week's commits" --dangerously-skip-permissions
+Label    :  Weekly Report
+```
+
+### Daily backup at midnight
+
+```
+Schedule :  0 0 * * *
+Command  :  tar -czf ~/backups/project-$(date +%Y%m%d).tar.gz ~/my-project
+Label    :  Project Backup
+```
+
+### Log cleanup every Monday
+
+```
+Schedule :  0 6 * * 1
+Command  :  find ~/.cronlab/logs -name "*.log" -mtime +30 -delete
+Label    :  Log Cleanup
+```
+
+---
+
+## Cron expressions
+
+Cronlab uses the standard 5-field cron syntax:
+
+```
+*    *    *    *    *
+|    |    |    |    |
+|    |    |    |    +-- Day of week (0-6, 0 = Sunday)
+|    |    |    +------- Month (1-12)
+|    |    +------------ Day of month (1-31)
+|    +----------------- Hour (0-23)
++---------------------- Minute (0-59)
+```
+
+### Available presets
+
+| Preset | Expression | Use case |
+|---|---|---|
+| Every minute | `* * * * *` | Testing and debug |
+| Every 5 min | `*/5 * * * *` | Frequent monitoring |
+| Every 15 min | `*/15 * * * *` | Health checks |
+| Every hour | `0 * * * *` | Hourly tasks |
+| Every day 9 AM | `0 9 * * *` | Daily standup |
+| Every day midnight | `0 0 * * *` | Nightly maintenance |
+| Mon-Fri 9 AM | `0 9 * * 1-5` | Weekdays only |
+| Every Sunday | `0 0 * * 0` | Weekly reports |
+| 1st of month | `0 0 1 * *` | Monthly reports |
+
+---
+
+## API
+
+All routes are under `/api/crontab`.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/crontab` | List all tasks |
+| `POST` | `/api/crontab` | Create a new task |
+| `PUT` | `/api/crontab` | Update an existing task |
+| `PATCH` | `/api/crontab` | Enable/disable a task |
+| `DELETE` | `/api/crontab` | Delete a task |
+| `GET` | `/api/crontab/history` | Execution history |
+
+### curl examples
+
+```bash
+# List tasks
+curl http://localhost:3000/api/crontab
+
+# Create a task
+curl -X POST http://localhost:3000/api/crontab \
+  -H "Content-Type: application/json" \
+  -d '{
+    "schedule": "0 9 * * 1-5",
+    "command": "claude -p \"Review open PRs\" --dangerously-skip-permissions",
+    "comment": "Daily Code Review"
+  }'
+
+# Disable a task
+curl -X PATCH http://localhost:3000/api/crontab \
+  -H "Content-Type: application/json" \
+  -d '{"id": "task-123", "enabled": false}'
+
+# Update a task
+curl -X PUT http://localhost:3000/api/crontab \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "task-123",
+    "schedule": "0 10 * * 1-5",
+    "command": "claude -p \"New prompt\" --dangerously-skip-permissions",
+    "comment": "Updated label"
+  }'
+
+# Delete a task
+curl -X DELETE http://localhost:3000/api/crontab \
+  -H "Content-Type: application/json" \
+  -d '{"id": "task-123"}'
+```
+
+---
+
+## Tech stack
+
+| Component | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router) |
+| UI | React 19, Tailwind CSS 4 |
+| Font | Geist Sans + Geist Mono |
+| Scheduler | macOS launchd |
+| Plist | simple-plist |
+| Runtime | Node.js |
+
+---
+
+## Debugging
+
+### Check active LaunchAgents
+
+```bash
+launchctl list | grep cronlab
+```
+
+### View job logs
+
+```bash
+cat ~/.cronlab/logs/task-XXXX.stdout.log
+cat ~/.cronlab/logs/task-XXXX.stderr.log
+```
+
+### List plist files
+
+```bash
+ls ~/Library/LaunchAgents/com.cronlab.*
+```
+
+### Force reload a job
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.cronlab.task-XXXX.plist
+launchctl load ~/Library/LaunchAgents/com.cronlab.task-XXXX.plist
+```
+
+---
+
+## License
+
+MIT
