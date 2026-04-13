@@ -47,40 +47,25 @@ launchd  -->  Keychain access     -->  Claude runs fine
 
 > Main view with tasks showing active/inactive states, cron schedules, and commands.
 
-```
-+--------------------------------------------------+
-|  Cronlab                                          |
-|  Scheduled tasks                                  |
-|                                                   |
-|  [Tasks 3]  [New]  [History]                      |
-|                                                   |
-|  +----------------------------------------------+|
-|  | * Active  Daily Code Review            [=] [x]||
-|  | 0 9 * * * -> claude -p "Review open PRs..."  ||
-|  | Every day at 9:00 AM                          ||
-|  +----------------------------------------------+|
-|                                                   |
-|  +----------------------------------------------+|
-|  | * Inactive  Health Check CI            [ ] [x]||
-|  | */15 * * * * -> claude -p "Check status..."  ||
-|  | Every 15 minutes                              ||
-|  +----------------------------------------------+|
-|                                                   |
-|  +----------------------------------------------+|
-|  | * Active  Weekly Report                [=] [x]||
-|  | 0 0 * * 0 -> claude -p "Generate report..."  ||
-|  | Every Sunday at midnight                      ||
-|  +----------------------------------------------+|
-+--------------------------------------------------+
-```
+![Task List](docs/tasks.png)
 
 ### Create form
 
 > Live cron expression preview, 9 quick presets, command and label fields.
 
+![Create Form](docs/create.png)
+
 ### Inline edit mode
 
 > Click the pencil icon to edit the schedule, command, and label directly in the card.
+
+![Inline Edit](docs/edit.png)
+
+### Execution history
+
+> View stdout/stderr logs from each task execution.
+
+![History](docs/history.png)
 
 ---
 
